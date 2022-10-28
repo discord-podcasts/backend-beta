@@ -700,13 +700,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
-name = "podcasts-backend"
+name = "podcast_backend"
 version = "0.1.0"
 dependencies = [
  "actix-web",
  "log",
+ "once_cell",
+ "rand",
  "serde",
- "uuid",
 ]
 
 [[package]]
@@ -1048,15 +1049,6 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
-]
-
-[[package]]
-name = "uuid"
-version = "1.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "feb41e78f93363bb2df8b0e86a2ca30eed7806ea16ea0c790d757cf93f79be83"
-dependencies = [
- "getrandom",
 ]
 
 [[package]]
