@@ -1,26 +1,20 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::env;
 
-use actix_web::{App, get, HttpServer, middleware::Logger, post};
-use actix_web::web::{Json, Query};
-use once_cell::sync::Lazy;
+use actix::{Actor, Context};
+use actix_web::web::{self, Data};
+use actix_web::{middleware::Logger, App, HttpServer};
 use rand::prelude::IteratorRandom;
 use rand::thread_rng;
-use serde::{Deserialize, Serialize};
+use tracing_subscriber::EnvFilter;
 
-static PODCASTS: Lazy<Mutex<HashMap<String, Podcast>>> = Lazy::new(|| {
-    Mutex::new(HashMap::new())
-});
+use crate::podcast::Podcast;
 
-#[derive(Deserialize)]
-struct PodcastQuery {
-    id: String,
-}
+mod podcast;
+mod ws;
 
-#[derive(Serialize, Deserialize)]
-struct Podcast {
-    id: String,
-    active_since: Option<i32>,
+pub struct Application {
+    sessions: HashMap<String, Podcast>,
 }
 
 #[get("/podcast")]
@@ -32,41 +26,55 @@ async fn get_podcast(info: Query<PodcastQuery>) -> Json<Podcast> {
     Json(podcast)
 }
 
-#[post("/podcast")]
-async fn create_podcast() -> Json<Podcast> {
-    let podcast = Podcast {
-        id: generate_id(),
-        active_since: None,
-    };
-    println!("{}", podcast.id);
-    Json(podcast)
+impl Application {
+    fn new() -> Self {
+        Self {
+            sessions: HashMap::new(),
+        }
+    }
+
+    fn generate_id(&self) -> String {
+        let length = 5;
+        let chars = "abcdefghijklmnopqrstuvwxyz".chars();
+        let mut id = String::new();
+
+        for _ in 0..length {
+            let char = chars.clone().choose(&mut thread_rng()).unwrap();
+            id.push(char);
+        }
+
+        if self.sessions.contains_key(&id) {
+            return self.generate_id();
+        }
+
+        id
+    }
 }
 
-fn generate_id() -> String {
-    let length = 5;
-    let chars = "abcdefghijklmnopqrstuvwxyz".chars();
-    let mut id = String::new();
-
-    for _x in 0..length {
-        let char = chars.clone().choose(&mut thread_rng()).unwrap();
-        id.push(char);
-    }
-    if PODCASTS.lock().unwrap().contains_key(&id) {
-        return generate_id();
-    }
-    return id;
+impl Actor for Application {
+    type Context = Context<Application>;
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
+
+    // FIXME: Set fallback port
+    let port: u16 = env::var("PORT").unwrap().parse().unwrap();
+
+    let app = Data::new(Application::new());
     HttpServer::new(move || {
         let logger = Logger::default();
         App::new()
             .wrap(logger)
-            .service(get_podcast)
-            .service(create_podcast)
+            .route("/", web::get().to(podcast::get))
+            .route("/podcast", web::post().to(podcast::create))
+            .route("/ws", web::get().to(ws::websocket))
+            .app_data(Data::clone(&app))
     })
-        .bind(("127.0.0.1", 5050))?
-        .run()
-        .await
+    .bind(("127.0.0.1", port))?
+    .run()
+    .await
 }
