@@ -17,6 +17,15 @@ pub struct Application {
     sessions: HashMap<String, Podcast>,
 }
 
+#[get("/podcast")]
+async fn get_podcast(info: Query<PodcastQuery>) -> Json<Podcast> {
+    let podcast = Podcast {
+        id: info.into_inner().id,
+        active_since: None,
+    };
+    Json(podcast)
+}
+
 impl Application {
     fn new() -> Self {
         Self {
