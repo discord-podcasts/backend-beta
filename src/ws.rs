@@ -1,5 +1,7 @@
 use actix::{Actor, ActorContext, StreamHandler};
 use actix_web::{
+    body::BoxBody,
+    http::StatusCode,
     web::{Data, Payload},
     HttpRequest, HttpResponse,
 };
@@ -38,8 +40,15 @@ pub async fn websocket(
     stream: Payload,
     _app: Data<Application>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    // FIXME: Handle request without peer addr
-    let addr = req.peer_addr().unwrap();
+    let addr = match req.peer_addr() {
+        Some(addr) => addr,
+        None => {
+            debug!("Rejecting websocket connection without peer address");
+            return Ok(HttpResponse::new(StatusCode::BAD_REQUEST)
+                .set_body(BoxBody::new("Missing peer address")));
+        }
+    };
+
     debug!(?addr, "Incoming websocket connection");
     let podcast = PodcastWs {};
     ws::start(podcast, &req, stream)
