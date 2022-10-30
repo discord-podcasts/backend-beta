@@ -4,13 +4,8 @@ use std::env;
 use actix::{Actor, Context};
 use actix_web::web::{self, Data};
 use actix_web::{middleware::Logger, App, HttpServer};
-<<<<<<< HEAD
 use rand::Rng;
-=======
-use rand::prelude::IteratorRandom;
-use rand::thread_rng;
 use tracing::info;
->>>>>>> ec3919e3a10979118b20f426a04b755f285b81c0
 use tracing_subscriber::EnvFilter;
 
 use crate::podcast::Podcast;
