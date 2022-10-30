@@ -5,13 +5,13 @@ use crate::Application;
 
 #[derive(Serialize, Deserialize)]
 pub struct Podcast {
-    pub id: String,
+    pub id: u32,
     pub active_since: Option<i32>,
 }
 
 #[derive(Deserialize)]
 pub struct PodcastQuery {
-    id: String,
+    id: u32,
 }
 
 pub async fn get(Query(query): Query<PodcastQuery>) -> Json<Podcast> {

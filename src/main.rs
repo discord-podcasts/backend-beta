@@ -4,8 +4,7 @@ use std::env;
 use actix::{Actor, Context};
 use actix_web::web::{self, Data};
 use actix_web::{middleware::Logger, App, HttpServer};
-use rand::prelude::IteratorRandom;
-use rand::thread_rng;
+use rand::Rng;
 use tracing_subscriber::EnvFilter;
 
 use crate::podcast::Podcast;
@@ -14,7 +13,7 @@ mod podcast;
 mod ws;
 
 pub struct Application {
-    sessions: HashMap<String, Podcast>,
+    sessions: HashMap<u32, Podcast>,
 }
 
 impl Application {
@@ -24,20 +23,11 @@ impl Application {
         }
     }
 
-    fn generate_id(&self) -> String {
-        let length = 5;
-        let chars = "abcdefghijklmnopqrstuvwxyz".chars();
-        let mut id = String::new();
-
-        for _ in 0..length {
-            let char = chars.clone().choose(&mut thread_rng()).unwrap();
-            id.push(char);
-        }
-
+    fn generate_id(&self) -> u32 {
+        let id: u32 = rand::thread_rng().gen();
         if self.sessions.contains_key(&id) {
             return self.generate_id();
         }
-
         id
     }
 }
