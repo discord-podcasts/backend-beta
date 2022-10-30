@@ -6,6 +6,7 @@ use actix_web::web::{self, Data};
 use actix_web::{middleware::Logger, App, HttpServer};
 use rand::prelude::IteratorRandom;
 use rand::thread_rng;
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use crate::podcast::Podcast;
@@ -52,8 +53,15 @@ async fn main() -> std::io::Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    // FIXME: Set fallback port
-    let port: u16 = env::var("PORT").unwrap().parse().unwrap();
+    let host = match env::var("HOST") {
+        Ok(host) => host,
+        Err(_) => "127.0.0.1".to_owned(),
+    };
+    let port = match env::var("PORT").map(|v| v.parse()) {
+        Ok(Ok(port)) => port,
+        _ => 5050,
+    };
+    info!("Launching application on {host}:{port}");
 
     let app = Data::new(Application::new());
     HttpServer::new(move || {
@@ -65,7 +73,7 @@ async fn main() -> std::io::Result<()> {
             .route("/ws", web::get().to(ws::websocket))
             .app_data(Data::clone(&app))
     })
-    .bind(("127.0.0.1", port))?
+    .bind((host, port))?
     .run()
     .await
 }
