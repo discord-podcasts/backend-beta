@@ -23,7 +23,7 @@ struct Podcast {
     active_since: Option<i32>,
 }
 
-#[get("/")]
+#[get("/podcast")]
 async fn get_podcast(info: Query<PodcastQuery>) -> Json<Podcast> {
     let podcast = Podcast {
         id: info.into_inner().id,
