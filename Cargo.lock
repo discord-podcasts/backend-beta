@@ -810,6 +810,7 @@ dependencies = [
  "actix-web-actors",
  "rand",
  "serde",
+ "serde_json",
  "tracing",
  "tracing-subscriber",
 ]

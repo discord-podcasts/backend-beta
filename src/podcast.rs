@@ -1,10 +1,20 @@
-use actix_web::web::{Data, Json, Query};
+use std::{borrow::Borrow, net::UdpSocket, sync::Mutex};
+
+use actix_web::{
+    error,
+    web::{Data, Json, Query},
+};
 use serde::{Deserialize, Serialize};
 
-use crate::Application;
+use crate::{audio_server::AudioServer, Application};
 
-#[derive(Serialize, Deserialize)]
 pub struct Podcast {
+    pub data: PodcastData,
+    pub audio_server: UdpSocket,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PodcastData {
     pub id: u32,
     pub active_since: Option<i32>,
 }
@@ -14,18 +24,34 @@ pub struct PodcastQuery {
     id: u32,
 }
 
-pub async fn get(Query(query): Query<PodcastQuery>) -> Json<Podcast> {
-    let podcast = Podcast {
-        id: query.id,
-        active_since: None,
-    };
-    Json(podcast)
+pub async fn get(
+    Query(query): Query<PodcastQuery>,
+    app: Data<Application>,
+) -> Result<Json<PodcastData>, actix_web::Error> {
+    let id = query.id;
+
+    match app.sessions.lock().unwrap().get(&id) {
+        Some(podcast) => Ok(Json(podcast.data.clone())),
+        None => Err(error::ErrorNotFound("Podcast doesn't exist")),
+    }
 }
 
-pub async fn create(app: Data<Application>) -> Json<Podcast> {
-    let podcast = Podcast {
-        id: app.generate_id(),
-        active_since: None,
+pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_web::Error> {
+    let audio_server = match AudioServer::create(&app) {
+        Some(audio_server) => audio_server,
+        None => return Err(error::ErrorBadRequest("All possible sockets are in use")),
     };
-    Json(podcast)
+    println!("Created audio server at 127.0.0.1:{}", audio_server.local_addr().unwrap().port());
+
+    let podcast = Podcast {
+        data: PodcastData {
+            id: app.generate_id(),
+            active_since: None,
+        },
+        audio_server: audio_server,
+    };
+
+    let podcast_data = podcast.data.clone();
+    app.add_session(podcast);
+    Ok(Json(podcast_data))
 }
