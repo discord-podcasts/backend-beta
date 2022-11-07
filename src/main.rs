@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::sync::Mutex;
 
 use actix::{Actor, Context};
 use actix_web::web::{self, Data};
@@ -10,26 +11,34 @@ use tracing_subscriber::EnvFilter;
 
 use crate::podcast::Podcast;
 
+mod audio_server;
 mod podcast;
 mod ws;
 
 pub struct Application {
-    sessions: HashMap<u32, Podcast>,
+    sessions: Mutex<HashMap<u32, Podcast>>,
 }
 
 impl Application {
     fn new() -> Self {
         Self {
-            sessions: HashMap::new(),
+            sessions: Mutex::new(HashMap::new()),
         }
     }
 
     fn generate_id(&self) -> u32 {
         let id: u32 = rand::thread_rng().gen();
-        if self.sessions.contains_key(&id) {
+        if self.sessions.lock().unwrap().contains_key(&id) {
             return self.generate_id();
         }
         id
+    }
+
+    fn add_session(&self, podcast: Podcast) {
+        self.sessions
+            .lock()
+            .unwrap()
+            .insert(podcast.data.id, podcast);
     }
 }
 

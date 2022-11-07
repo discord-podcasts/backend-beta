@@ -10,7 +10,7 @@ use tracing::debug;
 
 use crate::Application;
 
-struct PodcastWs {}
+struct PodcastWs;
 
 impl Actor for PodcastWs {
     type Context = WebsocketContext<Self>;
@@ -38,7 +38,7 @@ impl StreamHandler<Result<Message, ProtocolError>> for PodcastWs {
 pub async fn websocket(
     req: HttpRequest,
     stream: Payload,
-    _app: Data<Application>,
+    app: Data<Application>,
 ) -> Result<HttpResponse, actix_web::Error> {
     let addr = match req.peer_addr() {
         Some(addr) => addr,
