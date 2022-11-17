@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use actix::{Actor, Context};
 use actix_web::web::{self, Data};
 use actix_web::{middleware::Logger, App, HttpServer};
+use podcast::PodcastData;
 use rand::Rng;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -44,6 +45,15 @@ impl Application {
     fn remove_session(&self, id: &u32) {
         self.sessions.lock().unwrap().remove(id);
     }
+
+    fn list_sessions(&self) -> Vec<PodcastData> {
+        self.sessions
+            .lock()
+            .unwrap()
+            .values()
+            .map(|podcast| podcast.data.clone())
+            .collect()
+    }
 }
 
 impl Actor for Application {
@@ -73,6 +83,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(logger)
             .route("/podcast", web::get().to(podcast::get))
             .route("/podcast", web::post().to(podcast::create))
+            .route("/list", web::get().to(podcast::list))
             .route("/ws", web::get().to(ws::websocket))
             .app_data(Data::clone(&app))
     })

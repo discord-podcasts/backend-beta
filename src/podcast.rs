@@ -64,6 +64,10 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
     Ok(Json(podcast_data))
 }
 
+pub async fn list(app: Data<Application>) -> Result<Json<Vec<PodcastData>>, actix_web::Error> {
+    Result::Ok(Json(app.list_sessions()))
+}
+
 fn await_host(podcast: Arc<PodcastData>, app: Data<Application>) {
     thread::spawn(move || {
         let start = SystemTime::now();
