@@ -40,6 +40,10 @@ impl Application {
             .unwrap()
             .insert(podcast.data.id, podcast);
     }
+
+    fn remove_session(&self, id: &u32) {
+        self.sessions.lock().unwrap().remove(id);
+    }
 }
 
 impl Actor for Application {

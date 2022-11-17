@@ -1,9 +1,10 @@
-use std::{borrow::Borrow, net::UdpSocket, sync::Mutex};
+use std::{net::UdpSocket, sync::Arc, thread, time::SystemTime};
 
 use actix_web::{
     error,
     web::{Data, Json, Query},
 };
+use rand::distributions::uniform::SampleBorrow;
 use serde::{Deserialize, Serialize};
 
 use crate::{audio_server::AudioServer, Application};
@@ -41,7 +42,10 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
         Some(audio_server) => audio_server,
         None => return Err(error::ErrorBadRequest("All possible sockets are in use")),
     };
-    println!("Created audio server at 127.0.0.1:{}", audio_server.local_addr().unwrap().port());
+    println!(
+        "Created audio server at 127.0.0.1:{}",
+        audio_server.local_addr().unwrap().port()
+    );
 
     let podcast = Podcast {
         data: PodcastData {
@@ -53,5 +57,22 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
 
     let podcast_data = podcast.data.clone();
     app.add_session(podcast);
+
+    let thread_safe_podcast = Arc::from(podcast_data.clone());
+    await_host(thread_safe_podcast, app);
+
     Ok(Json(podcast_data))
+}
+
+fn await_host(podcast: Arc<PodcastData>, app: Data<Application>) {
+    thread::spawn(move || {
+        let start = SystemTime::now();
+        println!("hi");
+        while podcast.active_since.is_none() {
+            if start.elapsed().unwrap().as_secs() > 60 {
+                app.remove_session(podcast.id.borrow());
+                return;
+            }
+        }
+    });
 }
