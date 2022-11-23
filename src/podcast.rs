@@ -73,7 +73,7 @@ fn await_host(podcast: Arc<PodcastData>, app: Data<Application>) {
         let start = SystemTime::now();
         while podcast.active_since.is_none() {
             if start.elapsed().unwrap().as_secs() > 60 {
-                app.remove_session(&podcast.id);
+                app.remove_session(podcast.id);
                 return;
             }
         }
