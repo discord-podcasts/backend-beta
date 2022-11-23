@@ -71,10 +71,9 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
 fn await_host(podcast: Arc<PodcastData>, app: Data<Application>) {
     thread::spawn(move || {
         let start = SystemTime::now();
-        println!("hi");
         while podcast.active_since.is_none() {
             if start.elapsed().unwrap().as_secs() > 60 {
-                app.remove_session(podcast.id.borrow());
+                app.remove_session(&podcast.id);
                 return;
             }
         }
