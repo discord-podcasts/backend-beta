@@ -56,8 +56,8 @@ impl Application {
         })
     }
 
-    fn remove_session(&self, id: &u32) {
-        self.sessions(|sessions| sessions.remove(id));
+    fn remove_session(&self, id: u32) {
+        self.sessions(|sessions| sessions.remove(&id));
     }
 }
 

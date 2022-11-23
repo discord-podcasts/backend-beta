@@ -4,7 +4,7 @@ use actix_web::{
     error,
     web::{Data, Json, Query},
 };
-use rand::distributions::uniform::SampleBorrow;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{audio_server::AudioServer, Application};
@@ -56,7 +56,7 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
             id: app.generate_id(),
             active_since: None,
         },
-        audio_server: audio_server,
+        audio_server,
     };
 
     let podcast_data = podcast.data.clone();
@@ -73,7 +73,7 @@ fn await_host(podcast: Arc<PodcastData>, app: Data<Application>) {
         let start = SystemTime::now();
         while podcast.active_since.is_none() {
             if start.elapsed().unwrap().as_secs() > 60 {
-                app.remove_session(&podcast.id);
+                app.remove_session(podcast.id);
                 return;
             }
         }
