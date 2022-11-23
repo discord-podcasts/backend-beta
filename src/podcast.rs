@@ -36,12 +36,19 @@ pub async fn get(
     }
 }
 
+pub async fn list(app: Data<Application>) -> Result<Json<Vec<PodcastData>>, actix_web::Error> {
+    Result::Ok(Json(app.list_sessions()))
+}
+
 pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_web::Error> {
     let audio_server = match AudioServer::create(&app) {
         Some(audio_server) => audio_server,
         None => return Err(error::ErrorBadRequest("All possible sockets are in use")),
     };
-    println!("Created audio server at 127.0.0.1:{}", audio_server.local_addr().unwrap().port());
+    println!(
+        "Created audio server at 127.0.0.1:{}",
+        audio_server.local_addr().unwrap().port()
+    );
 
     let podcast = Podcast {
         data: PodcastData {
