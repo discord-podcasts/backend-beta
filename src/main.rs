@@ -35,11 +35,16 @@ impl Application {
         id
     }
 
+    fn sessions<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut HashMap<u32, Podcast>) -> R,
+    {
+        let mut sessions = self.sessions.lock().unwrap();
+        f(&mut sessions)
+    }
+
     fn add_session(&self, podcast: Podcast) {
-        self.sessions
-            .lock()
-            .unwrap()
-            .insert(podcast.data.id, podcast);
+        self.sessions(|s| s.insert(podcast.data.id, podcast));
     }
 
     fn list_sessions(&self) -> Vec<PodcastData> {
