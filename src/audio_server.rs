@@ -38,6 +38,6 @@ impl AudioServer {
             }
         }
 
-        return None;
+        None
     }
 }

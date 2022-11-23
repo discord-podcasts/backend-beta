@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, net::UdpSocket, sync::Mutex};
+use std::net::UdpSocket;
 
 use actix_web::{
     error,
@@ -55,7 +55,7 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
             id: app.generate_id(),
             active_since: None,
         },
-        audio_server: audio_server,
+        audio_server,
     };
 
     let podcast_data = podcast.data.clone();
