@@ -48,12 +48,12 @@ impl Application {
     }
 
     fn list_sessions(&self) -> Vec<PodcastData> {
-        self.sessions
-            .lock()
-            .unwrap()
-            .values()
-            .map(|podcast| podcast.data.clone())
-            .collect()
+        self.sessions(|sessions| {
+            sessions
+                .values()
+                .map(|podcast| podcast.data.clone())
+                .collect()
+        })
     }
 }
 
