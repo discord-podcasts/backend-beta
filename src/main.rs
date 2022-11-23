@@ -55,6 +55,10 @@ impl Application {
                 .collect()
         })
     }
+
+    fn remove_session(&self, id: &u32) {
+        self.sessions(|sessions| sessions.remove(id));
+    }
 }
 
 impl Actor for Application {

@@ -1,9 +1,10 @@
-use std::net::UdpSocket;
+use std::{net::UdpSocket, sync::Arc, thread, time::SystemTime};
 
 use actix_web::{
     error,
     web::{Data, Json, Query},
 };
+
 use serde::{Deserialize, Serialize};
 
 use crate::{audio_server::AudioServer, Application};
@@ -60,5 +61,21 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
 
     let podcast_data = podcast.data.clone();
     app.add_session(podcast);
+
+    let thread_safe_podcast = Arc::from(podcast_data.clone());
+    await_host(thread_safe_podcast, app);
+
     Ok(Json(podcast_data))
+}
+
+fn await_host(podcast: Arc<PodcastData>, app: Data<Application>) {
+    thread::spawn(move || {
+        let start = SystemTime::now();
+        while podcast.active_since.is_none() {
+            if start.elapsed().unwrap().as_secs() > 60 {
+                app.remove_session(&podcast.id);
+                return;
+            }
+        }
+    });
 }
