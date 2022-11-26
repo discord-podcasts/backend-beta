@@ -22,7 +22,7 @@ pub struct PodcastData {
 
 #[derive(Deserialize)]
 pub struct PodcastQuery {
-    id: u32,
+    pub id: u32,
 }
 
 pub async fn get(
