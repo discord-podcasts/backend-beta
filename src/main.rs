@@ -44,8 +44,8 @@ impl Application {
         f(&mut sessions)
     }
 
-    fn get_session(&self, id: &u32) -> Option<&Podcast> {
-        self.sessions(|sessions| sessions.get(id))
+    fn get_session(&self, id: u32) -> Option<&Podcast> {
+        self.sessions(|sessions| sessions.get(&id))
     }
 
     fn add_session(&self, podcast: Podcast) {

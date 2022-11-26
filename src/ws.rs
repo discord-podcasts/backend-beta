@@ -74,7 +74,7 @@ pub async fn websocket(
     };
 
     debug!(?addr, "Incoming websocket connection");
-    let podcast = app.get_session(&query.id);
+    let podcast = app.get_session(query.id);
     match podcast {
         Some(podcast) => {
             let podcastWs = PodcastWs {
