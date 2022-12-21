@@ -1,3 +1,5 @@
+use std::any::type_name;
+
 use actix::{Actor, ActorContext, StreamHandler};
 use actix_web::{
     body::BoxBody,
@@ -6,25 +8,44 @@ use actix_web::{
     HttpRequest, HttpResponse,
 };
 use actix_web_actors::ws::{self, Message, ProtocolError, WebsocketContext};
-use serde::Serialize;
 use tracing::debug;
 
-use crate::{events::HelloEvent, podcast::PodcastQuery, Application};
+use crate::{
+    events::{Event, EventWrapper, HelloEvent},
+    podcast::{PodcastData, PodcastQuery},
+    Application,
+};
 
 struct PodcastWs {
     id: u32,
+    app: Data<Application>,
 }
 
 impl PodcastWs {
-    fn send_json<T>(&self, ctx: &mut WebsocketContext<Self>, value: &T)
-    where
-        T: ?Sized + Serialize,
-    {
-        let text = serde_json::to_string(value);
-        match text {
-            Ok(text) => ctx.text(text),
-            Err(_) => {}
+    fn send_json<T: Event>(&self, ctx: &mut WebsocketContext<Self>, event: &T) {
+        let wrapper = EventWrapper {
+            event_type: event.event_type(),
+            data: event,
+        };
+        let json = serde_json::to_string(&wrapper);
+        match json {
+            Ok(json) => ctx.text(json),
+            Err(_) => {
+                debug!("Failed to serialize an event");
+            }
         }
+    }
+
+    fn get_podcast(&self) -> PodcastData {
+        self.app
+            .with_session(self.id, |session| session.data.clone())
+            .unwrap()
+    }
+
+    fn get_audio_server_port(&self) -> u16 {
+        self.app
+            .with_session(self.id, |session| session.audio_server_port)
+            .unwrap()
     }
 }
 
@@ -32,10 +53,10 @@ impl Actor for PodcastWs {
     type Context = WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
-        // Access Application here?
-        let ip_test = String::from("test");
-        let event = &HelloEvent { ip: ip_test };
-        self.send_json(ctx, event);
+        let event = HelloEvent {
+            port: self.get_audio_server_port(),
+        };
+        self.send_json(ctx, &event);
     }
 }
 
@@ -74,13 +95,14 @@ pub async fn websocket(
     };
 
     debug!(?addr, "Incoming websocket connection");
-    let podcast = app.get_session(query.id);
+    let podcast = app.with_session(query.id, |session| session.data.clone());
     match podcast {
         Some(podcast) => {
-            let podcastWs = PodcastWs {
-                id: podcast.data.id,
+            let podcast_ws = PodcastWs {
+                id: podcast.id,
+                app,
             };
-            ws::start(podcastWs, &req, stream)
+            ws::start(podcast_ws, &req, stream)
         }
         None => Err(actix_web::error::ErrorNotFound("Podcast doesn't exist")),
     }

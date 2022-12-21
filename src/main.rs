@@ -44,8 +44,16 @@ impl Application {
         f(&mut sessions)
     }
 
-    fn get_session(&self, id: u32) -> Option<&Podcast> {
-        self.sessions(|sessions| sessions.get(&id))
+    fn with_session<F, R>(&self, id: u32, f: F) -> Option<R>
+    where
+        F: FnOnce(&Podcast) -> R,
+    {
+        let sessions = self.sessions.lock().unwrap();
+        let session = sessions.get(&id);
+        match session {
+            Some(session) => Some(f(session)),
+            None => None,
+        }
     }
 
     fn add_session(&self, podcast: Podcast) {
