@@ -13,6 +13,7 @@ use tracing_subscriber::EnvFilter;
 use crate::podcast::Podcast;
 
 mod audio_server;
+mod events;
 mod podcast;
 mod ws;
 
@@ -41,6 +42,18 @@ impl Application {
     {
         let mut sessions = self.sessions.lock().unwrap();
         f(&mut sessions)
+    }
+
+    fn with_session<F, R>(&self, id: u32, f: F) -> Option<R>
+    where
+        F: FnOnce(&Podcast) -> R,
+    {
+        let sessions = self.sessions.lock().unwrap();
+        let session = sessions.get(&id);
+        match session {
+            Some(session) => Some(f(session)),
+            None => None,
+        }
     }
 
     fn add_session(&self, podcast: Podcast) {

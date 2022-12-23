@@ -12,6 +12,7 @@ use crate::{audio_server::AudioServer, Application};
 pub struct Podcast {
     pub data: PodcastData,
     pub audio_server: UdpSocket,
+    pub audio_server_port: u16,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -22,7 +23,7 @@ pub struct PodcastData {
 
 #[derive(Deserialize)]
 pub struct PodcastQuery {
-    id: u32,
+    pub id: u32,
 }
 
 pub async fn get(
@@ -46,10 +47,8 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
         Some(audio_server) => audio_server,
         None => return Err(error::ErrorBadRequest("All possible sockets are in use")),
     };
-    println!(
-        "Created audio server at 127.0.0.1:{}",
-        audio_server.local_addr().unwrap().port()
-    );
+    let audio_server_port = audio_server.local_addr().unwrap().port();
+    println!("Created audio server at 127.0.0.1:{}", audio_server_port);
 
     let podcast = Podcast {
         data: PodcastData {
@@ -57,6 +56,7 @@ pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_w
             active_since: None,
         },
         audio_server,
+        audio_server_port,
     };
 
     let podcast_data = podcast.data.clone();
