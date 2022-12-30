@@ -18,12 +18,16 @@ mod podcast;
 mod ws;
 
 pub struct Application {
+    authentication: HashMap<u32, String>,
     sessions: Mutex<HashMap<u32, Podcast>>,
 }
 
 impl Application {
     fn new() -> Self {
+        let mut auth = HashMap::new();
+        auth.insert(123 , "123".to_owned());
         Self {
+            authentication: auth,
             sessions: Mutex::new(HashMap::new()),
         }
     }
