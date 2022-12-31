@@ -1,28 +1,43 @@
-use std::any::type_name;
+use std::{net::SocketAddr, time::SystemTime};
 
 use actix::{Actor, ActorContext, StreamHandler};
 use actix_web::{
     body::BoxBody,
-    error::ErrorUnauthorized,
     http::StatusCode,
     web::{Data, Payload, Query},
     HttpRequest, HttpResponse,
 };
 use actix_web_actors::ws::{self, Message, ProtocolError, WebsocketContext};
+use serde::Deserialize;
 use tracing::debug;
 
 use crate::{
+    authentication::validate_authentication_data,
     events::{Event, EventWrapper, HelloEvent},
     podcast::{PodcastData, PodcastQuery},
     Application,
 };
 
-struct PodcastWs {
-    id: u32,
+struct PodcastWsSession {
+    podcast_id: u32,
+    client_id: u32,
+    host_client_id: u32,
     app: Data<Application>,
 }
 
-impl PodcastWs {
+#[derive(Deserialize)]
+pub struct MessageWrapper {
+    pub message_type: u32,
+    pub data: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct ClientConnect {
+    ip: String,
+    port: u32,
+}
+
+impl PodcastWsSession {
     fn send_json<T: Event>(&self, ctx: &mut WebsocketContext<Self>, event: &T) {
         let wrapper = EventWrapper {
             event_type: event.event_type(),
@@ -39,18 +54,59 @@ impl PodcastWs {
 
     fn get_podcast(&self) -> PodcastData {
         self.app
-            .with_session(self.id, |session| session.data.clone())
+            .with_session(self.podcast_id, |session| session.data.clone())
             .unwrap()
     }
 
     fn get_audio_server_port(&self) -> u16 {
         self.app
-            .with_session(self.id, |session| session.audio_server_port)
+            .with_session(self.podcast_id, |session| session.audio_server.port)
             .unwrap()
+    }
+
+    fn on_message_receive(&mut self, msg: String) {
+        let message = match serde_json::from_str::<MessageWrapper>(msg.as_str()) {
+            Ok(message) => message,
+            Err(_) => return,
+        };
+
+        // A client connected to the udp socket
+        if message.message_type == 1 {
+            let client_connect = match serde_json::from_value::<ClientConnect>(message.data) {
+                Ok(msg) => msg,
+                Err(_) => return,
+            };
+
+            let address: SocketAddr =
+                match format!("{}:{}", client_connect.ip, client_connect.port).parse() {
+                    Ok(address) => address,
+                    Err(_) => return,
+                };
+
+            if self.host_client_id == self.client_id {
+                self.app.with_session(self.podcast_id, |session| {
+                    let current_time_millis = SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .expect("Time went backwards")
+                        .as_millis();
+
+                    session.data.active_since = Some(current_time_millis);
+                    session.host_address = Some(address);
+                    println!("Host {} is ready to send", address);
+
+                    session.audio_server.listen(address);
+                });
+            } else {
+                self.app.with_session(self.podcast_id, |session| {
+                    session.clients.insert(address);
+                    println!("Client {} is ready to listen", address);
+                });
+            }
+        }
     }
 }
 
-impl Actor for PodcastWs {
+impl Actor for PodcastWsSession {
     type Context = WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {
@@ -61,7 +117,7 @@ impl Actor for PodcastWs {
     }
 }
 
-impl StreamHandler<Result<Message, ProtocolError>> for PodcastWs {
+impl StreamHandler<Result<Message, ProtocolError>> for PodcastWsSession {
     fn handle(&mut self, msg: Result<ws::Message, ProtocolError>, ctx: &mut Self::Context) {
         let msg = match msg {
             Ok(msg) => msg,
@@ -70,7 +126,10 @@ impl StreamHandler<Result<Message, ProtocolError>> for PodcastWs {
 
         debug!(?msg);
         match msg {
-            Message::Text(_) => {}
+            Message::Text(text_msg) => {
+                println!("This = {}", text_msg.len());
+                self.on_message_receive(text_msg.to_string())
+            }
             Message::Close(reason) => {
                 ctx.close(reason);
                 ctx.stop();
@@ -86,30 +145,10 @@ pub async fn websocket(
     stream: Payload,
     app: Data<Application>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    let client_id = req.headers().get("client_id");
-    let client_secret = req.headers().get("client_secret");
-
-    if client_id.is_none() || client_secret.is_none() {
-        return Err(ErrorUnauthorized("Missing authentication data"));
-    }
-
-    let client_id = match client_id.unwrap().to_str() {
-        Ok(id) => match id.parse::<u32>() {
-            Ok(number) => number,
-            Err(_) => return Err(ErrorUnauthorized("Your client id is not a number")),
-        },
-        Err(_) => return Err(ErrorUnauthorized("Invalid client_id formatting")),
+    let auth = match validate_authentication_data(&req, &app) {
+        Ok(auth) => auth,
+        Err(err) => return Err(err),
     };
-
-    let client_secret = match client_secret.unwrap().to_str() {
-        Ok(secret) => secret,
-        Err(_) => return Err(ErrorUnauthorized("Invalid client_secret formatting")),
-    };
-
-    let matching_secret = app.authentication.get(&client_id);
-    if matching_secret.is_none() || matching_secret.unwrap() != client_secret {
-        return Err(ErrorUnauthorized("Invalid client_secret formatting"));
-    }
 
     let addr = match req.peer_addr() {
         Some(addr) => addr,
@@ -121,11 +160,13 @@ pub async fn websocket(
     };
 
     debug!(?addr, "Incoming websocket connection");
-    let podcast = app.with_session(query.id, |session| session.data.clone());
-    match podcast {
-        Some(podcast) => {
-            let podcast_ws = PodcastWs {
-                id: podcast.id,
+    let podcast_data = app.with_session(query.id, |session| session.data.clone());
+    match podcast_data {
+        Some(podcast_data) => {
+            let podcast_ws = PodcastWsSession {
+                podcast_id: podcast_data.id,
+                client_id: auth.client_id,
+                host_client_id: podcast_data.host,
                 app,
             };
             ws::start(podcast_ws, &req, stream)
