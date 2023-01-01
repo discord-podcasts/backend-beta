@@ -1,7 +1,4 @@
 use std::{
-    collections::HashSet,
-    net::SocketAddr,
-    sync::Arc,
     thread,
     time::{Duration, SystemTime},
 };
@@ -9,7 +6,7 @@ use std::{
 use actix_web::{
     error,
     web::{Data, Json, Query},
-    App, HttpRequest,
+    HttpRequest,
 };
 
 use serde::{Deserialize, Serialize};
@@ -20,8 +17,6 @@ use crate::{audio_server::AudioServer, authentication::validate_authentication_d
 pub struct Podcast {
     pub data: PodcastData,
     pub audio_server: AudioServer,
-    pub host_address: Option<SocketAddr>, // UDP socket address of the host
-    pub clients: HashSet<SocketAddr>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -82,8 +77,6 @@ pub async fn create(
             host: auth.client_id,
         },
         audio_server,
-        host_address: None,
-        clients: HashSet::new(),
     };
     let copied_podcast_data = podcast.data.clone();
 

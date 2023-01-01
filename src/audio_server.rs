@@ -1,7 +1,8 @@
 use std::{
+    collections::HashSet,
     net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
     ops::Range,
-    sync::Arc,
+    sync::{Arc, Mutex},
     thread,
 };
 
@@ -14,6 +15,8 @@ static PORT_RANGE: Range<u16> = 42000..42100;
 pub struct AudioServer {
     socket: Arc<UdpSocket>,
     pub port: u16,
+    pub host_address: Option<SocketAddr>, // UDP socket address of the host
+    pub clients: Arc<Mutex<HashSet<SocketAddr>>>, // UDP socket addresses of the clients
 }
 
 impl AudioServer {
@@ -42,6 +45,8 @@ impl AudioServer {
                     let audio_server = AudioServer {
                         socket: Arc::new(socket),
                         port,
+                        host_address: None,
+                        clients: Arc::from(Mutex::from(HashSet::new())),
                     };
 
                     return Some(audio_server);
@@ -55,9 +60,11 @@ impl AudioServer {
 
     pub fn listen(&self, host_address: SocketAddr) {
         let socket = self.socket.clone();
+        let thread_safe_clients = self.clients.clone();
 
         thread::spawn(move || {
             let mut buffer = Vec::new();
+            let clients = thread_safe_clients;
             loop {
                 // Reset buffer
                 buffer.clear();
@@ -72,9 +79,16 @@ impl AudioServer {
                         continue;
                     }
 
-                    let string = String::from_utf8(buffer.clone()).unwrap();
+                    let array = buffer.as_slice();
+                    let clients = clients.lock().unwrap();
+                    for client in clients.iter() {
+                        let result = socket.send_to(array, client);
+                        if result.is_err() {
+                            println!("Failed to send")
+                        }
+                    }
                     // Print the received data and the client's address
-                    println!("Received data from {}: {}", src, string);
+                    //println!("Received data from {}: {}", src, string);
                 }
             }
         });

@@ -91,14 +91,14 @@ impl PodcastWsSession {
                         .as_millis();
 
                     session.data.active_since = Some(current_time_millis);
-                    session.host_address = Some(address);
+                    session.audio_server.host_address = Some(address);
                     println!("Host {} is ready to send", address);
 
                     session.audio_server.listen(address);
                 });
             } else {
                 self.app.with_session(self.podcast_id, |session| {
-                    session.clients.insert(address);
+                    session.audio_server.clients.lock().unwrap().insert(address);
                     println!("Client {} is ready to listen", address);
                 });
             }
