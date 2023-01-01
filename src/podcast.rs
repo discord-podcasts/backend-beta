@@ -1,24 +1,29 @@
-use std::{net::UdpSocket, sync::Arc, thread, time::SystemTime};
+use std::{
+    thread,
+    time::{Duration, SystemTime},
+};
 
 use actix_web::{
     error,
     web::{Data, Json, Query},
+    HttpRequest,
 };
 
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
-use crate::{audio_server::AudioServer, Application};
+use crate::{audio_server::AudioServer, authentication::validate_authentication_data, Application};
 
 pub struct Podcast {
     pub data: PodcastData,
-    pub audio_server: UdpSocket,
-    pub audio_server_port: u16,
+    pub audio_server: AudioServer,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PodcastData {
     pub id: u32,
-    pub active_since: Option<i32>,
+    pub active_since: Option<u128>,
+    pub host: u32,
 }
 
 #[derive(Deserialize)]
@@ -42,40 +47,77 @@ pub async fn list(app: Data<Application>) -> Result<Json<Vec<PodcastData>>, acti
     Result::Ok(Json(app.list_sessions()))
 }
 
-pub async fn create(app: Data<Application>) -> Result<Json<PodcastData>, actix_web::Error> {
+pub async fn create(
+    app: Data<Application>,
+    req: HttpRequest,
+) -> Result<Json<PodcastData>, actix_web::Error> {
+    let auth = match validate_authentication_data(&req, &app) {
+        Ok(auth) => auth,
+        Err(error) => return Err(error),
+    };
+
+    let addr = match req.peer_addr() {
+        Some(addr) => addr,
+        None => {
+            debug!("Rejecting websocket connection without peer address");
+            return Err(error::ErrorBadRequest("Missing peer address"));
+        }
+    };
+    println!("Request by {}", addr.ip().to_string());
+
     let audio_server = match AudioServer::create(&app) {
         Some(audio_server) => audio_server,
         None => return Err(error::ErrorBadRequest("All possible sockets are in use")),
     };
-    let audio_server_port = audio_server.local_addr().unwrap().port();
-    println!("Created audio server at 127.0.0.1:{}", audio_server_port);
 
     let podcast = Podcast {
         data: PodcastData {
             id: app.generate_id(),
             active_since: None,
+            host: auth.client_id,
         },
         audio_server,
-        audio_server_port,
     };
+    let copied_podcast_data = podcast.data.clone();
 
-    let podcast_data = podcast.data.clone();
+    await_host(podcast.data.id, app.clone());
     app.add_session(podcast);
-
-    let thread_safe_podcast = Arc::from(podcast_data.clone());
-    await_host(thread_safe_podcast, app);
-
-    Ok(Json(podcast_data))
+    Ok(Json(copied_podcast_data))
 }
 
-fn await_host(podcast: Arc<PodcastData>, app: Data<Application>) {
+/**
+ * Makes sure that the host connects to its podcast in time.
+ */
+fn await_host(podcast_id: u32, app: Data<Application>) {
+    /**
+     * Checks wheter the host is connected.
+     *
+     * Option Some(bool): Podcast exists and bool shows wheter host is connected or not,
+     * Option None: Podcast doesn't exist anymore,
+     */
+    fn is_host_connected(podcast_id: u32, app: Data<Application>) -> Option<bool> {
+        return app.with_session(podcast_id, |session| session.data.active_since.is_some());
+    }
+
     thread::spawn(move || {
         let start = SystemTime::now();
-        while podcast.active_since.is_none() {
-            if start.elapsed().unwrap().as_secs() > 60 {
-                app.remove_session(podcast.id);
+        loop {
+            let host_connected = match is_host_connected(podcast_id, app.clone()) {
+                Some(connected) => connected,
+                None => return, // Podcast doesn't exist anymore
+            };
+
+            if host_connected {
                 return;
             }
+
+            // Host didn't show up after 60 seconds
+            if start.elapsed().unwrap().as_secs() > 60 {
+                app.remove_session(podcast_id);
+                return;
+            }
+
+            thread::sleep(Duration::from_secs(2));
         }
     });
 }

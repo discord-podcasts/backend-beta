@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::env;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use actix::{Actor, Context};
 use actix_web::web::{self, Data};
@@ -13,6 +13,7 @@ use tracing_subscriber::EnvFilter;
 use crate::podcast::Podcast;
 
 mod audio_server;
+mod authentication;
 mod events;
 mod podcast;
 mod ws;
@@ -25,7 +26,7 @@ pub struct Application {
 impl Application {
     fn new() -> Self {
         let mut auth = HashMap::new();
-        auth.insert(123 , "123".to_owned());
+        auth.insert(123, "123".to_owned());
         Self {
             authentication: auth,
             sessions: Mutex::new(HashMap::new()),
@@ -50,10 +51,10 @@ impl Application {
 
     fn with_session<F, R>(&self, id: u32, f: F) -> Option<R>
     where
-        F: FnOnce(&Podcast) -> R,
+        F: FnOnce(&mut Podcast) -> R,
     {
-        let sessions = self.sessions.lock().unwrap();
-        let session = sessions.get(&id);
+        let mut sessions = self.sessions.lock().unwrap();
+        let session = sessions.get_mut(&id);
         match session {
             Some(session) => Some(f(session)),
             None => None,
