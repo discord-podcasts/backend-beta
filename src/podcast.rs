@@ -1,21 +1,24 @@
-use std::{
-    thread,
-    time::{Duration, SystemTime},
+use crate::{
+    audio_server::AudioServer,
+    authentication::validate_authentication_data,
+    websocket::{events::events::Event, ws::PodcastWsSession},
+    Application,
 };
-
 use actix_web::{
     error,
     web::{Data, Json, Query},
     HttpRequest,
 };
-
 use serde::{Deserialize, Serialize};
+use std::{
+    thread,
+    time::{Duration, SystemTime},
+};
 use tracing::debug;
-
-use crate::{audio_server::AudioServer, authentication::validate_authentication_data, Application};
 
 pub struct Podcast {
     pub data: PodcastData,
+    pub ws_clients: Vec<PodcastWsSession>,
     pub audio_server: AudioServer,
 }
 
@@ -29,6 +32,14 @@ pub struct PodcastData {
 #[derive(Deserialize)]
 pub struct PodcastQuery {
     pub id: u32,
+}
+
+impl Podcast {
+    pub fn send_to_all<T: Event>(&self, event: T) {
+        for client in &self.ws_clients {
+            client.send_json(&event)
+        }
+    }
 }
 
 pub async fn get(
@@ -76,6 +87,7 @@ pub async fn create(
             active_since: None,
             host: auth.client_id,
         },
+        ws_clients: Vec::new(),
         audio_server,
     };
     let copied_podcast_data = podcast.data.clone();

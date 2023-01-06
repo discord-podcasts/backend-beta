@@ -1,22 +1,23 @@
 use std::collections::HashMap;
 use std::env;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 use actix::{Actor, Context};
 use actix_web::web::{self, Data};
 use actix_web::{middleware::Logger, App, HttpServer};
-use podcast::PodcastData;
 use rand::Rng;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+
+use podcast::PodcastData;
 
 use crate::podcast::Podcast;
 
 mod audio_server;
 mod authentication;
-mod events;
 mod podcast;
-mod ws;
+mod requests;
+mod websocket;
 
 pub struct Application {
     authentication: HashMap<u32, String>,
@@ -27,6 +28,7 @@ impl Application {
     fn new() -> Self {
         let mut auth = HashMap::new();
         auth.insert(123, "123".to_owned());
+        auth.insert(345, "345".to_owned());
         Self {
             authentication: auth,
             sessions: Mutex::new(HashMap::new()),
@@ -107,7 +109,7 @@ async fn main() -> std::io::Result<()> {
             .route("/podcast", web::get().to(podcast::get))
             .route("/podcast", web::post().to(podcast::create))
             .route("/list", web::get().to(podcast::list))
-            .route("/ws", web::get().to(ws::websocket))
+            .route("/ws", web::get().to(crate::websocket::ws::websocket))
             .app_data(Data::clone(&app))
     })
     .bind((host, port))?
